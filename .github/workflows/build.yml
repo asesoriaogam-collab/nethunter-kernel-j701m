@@ -78,8 +78,8 @@ jobs:
           echo "# CONFIG_MALI_R29P0 is not set" >> out/.config
           echo "# CONFIG_DISPLAY_USE_INFO is not set" >> out/.config
           echo "CONFIG_PM_OPP=y" >> out/.config
-          echo "# CONFIG_KNOX_NCM is not set" >> out/.config
-          echo "# CONFIG_SOCKEV_NPA is not set" >> out/.config
+          echo "CONFIG_KNOX_NCM=y" >> out/.config
+          echo "CONFIG_SOCKEV_NPA=y" >> out/.config
           make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
           make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j$(nproc --all) || make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j1
 
