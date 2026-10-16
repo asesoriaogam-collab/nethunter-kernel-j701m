@@ -29,6 +29,7 @@ jobs:
           cd kernel_source
 
           # 4.1 Parchear exclusivamente el bug de lcd->code y el header de pm_opp en GPU
+          sed -i '1i #ifndef PANEL_STATE_RESUMED\n#define PANEL_STATE_RESUMED 0\n#define PANEL_STATE_SUSPENED 1\n#define PANEL_STATE_SUSPENDING 2\n#endif' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
           sed -i 's/lcd->code\[[0-9]\]/0/g' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
           find drivers/gpu/arm/t83x -name "mali_kbase_core_linux.c" -exec sed -i '1i #include <linux/pm_opp.h>\n__attribute__((weak)) int dev_pm_opp_of_add_table(struct device *dev) { return 0; }' {} + || true
           # Si el arbol tiene r28p0, forzar que el Makefile de t83x compile r28p0 en lugar de r12p0
