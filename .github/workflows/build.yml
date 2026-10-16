@@ -79,6 +79,10 @@ jobs:
           export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           cd kernel_source
           make O=out HOSTCFLAGS="-fcommon -Wno-error" j7velte_nh_defconfig
+          echo "CONFIG_FB_MSM_MDSS_COMMON=y" >> out/.config
+          echo "CONFIG_FB_EXYNOS_DP=y" >> out/.config
+          echo "CONFIG_EXYNOS_DECON_FB=y" >> out/.config
+          echo "CONFIG_BACKLIGHT_CLASS_DEVICE=y" >> out/.config
           echo "CONFIG_MALI_T83X=y" >> out/.config
           echo "CONFIG_MALI_R28P0=y" >> out/.config
           echo "# CONFIG_MALI_R12P0 is not set" >> out/.config
