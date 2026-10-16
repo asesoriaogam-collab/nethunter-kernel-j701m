@@ -1,4 +1,4 @@
-name: Build NetHunter Kernel J701M (3.18.140 r28p0 Permissive)
+name: Build NetHunter J701M Final Permissive
 
 on:
   push:
@@ -17,13 +17,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ccache bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python2 python-is-python3
 
-      - name: 3. Clonar Toolchain GCC 4.9 y Kernel XDA (simple_q_permissive)
+      - name: 3. Clonar Toolchain GCC 4.9 y Kernel gonicdroid (3.18.140)
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
-          git clone --depth=1 https://github.com/samsungexynos7870/android_kernel_samsung_exynos7870.git -b simple_q_permissive kernel_source
+          git clone --depth=1 https://github.com/gonicdroid/android_kernel_samsung_exynos7870.git -b main kernel_source
           git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git -b v5.3.9 drivers_8188eu
 
-      - name: 4. Integrar RTL8188EUS, Parches de Compilacion y Forzar SELinux Permissive
+      - name: 4. Parchear Codigo Fuente (Drivers Wi-Fi, SELinux Permissive y Panel de Video)
         run: |
           cd kernel_source
           mkdir -p out
@@ -36,22 +36,21 @@ jobs:
           # Copiar defconfig base
           cp -f ../j7velte_nethunter_defconfig out/.config
 
-          # Parchear SELinux directamente en el codigo fuente para garantizar permissive=1 (enforcing=0)
-          sed -i 's/selinux_enforcing = 1/selinux_enforcing = 0/g' security/selinux/*.c security/selinux/include/*.h 2>/dev/null || true
-          sed -i 's/enforcing = 1/enforcing = 0/g' security/selinux/hooks.c 2>/dev/null || true
-          sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE/CONFIG_DISABLED_ALWAYS_ENFORCE/g' security/selinux/*.c security/selinux/include/*.h 2>/dev/null || true
+          # Forzar SELinux Permissive a nivel de codigo fuente en security/selinux
+          find security/selinux -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE/CONFIG_NO_ALWAYS_ENFORCE/g' {} +
+          find security/selinux -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/selinux_enforcing = 1/selinux_enforcing = 0/g' {} +
+          sed -i 's/enforcing = 1/enforcing = 0/g' security/selinux/hooks.c || true
 
-          # Definir constantes de estado del panel sin alterar lcd->code original
+          # Mantener valores reales de calibracion del panel AMOLED intactos (dsim_panel.h)
           sed -i '1i #ifndef PANEL_STATE_RESUMED\n#define PANEL_STATE_RESUMED 0\n#define PANEL_STATE_SUSPENED 1\n#define PANEL_STATE_SUSPENDING 2\n#endif' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
+          sed -i 's/#ifdef CONFIG_DISPLAY_USE_INFO/#if 1/g' drivers/video/fbdev/exynos/decon_7870/panels/dsim_panel.h || true
 
-          # Ajustar flags en .config
+          # Configurar .config con herramientas del kernel
           chmod -R +x scripts/
-          sed -i 's/ccache //g' Makefile || true
+          ./scripts/config --file out/.config -d DISPLAY_USE_INFO
           ./scripts/config --file out/.config -e SECURITY_SELINUX_DEVELOP
-          ./scripts/config --file out/.config -d SECURITY_SELINUX_ALWAYS_ENFORCE
-          ./scripts/config --file out/.config -d ALWAYS_ENFORCE
           ./scripts/config --file out/.config -e SECURITY_SELINUX_ALWAYS_PERMISSIVE
-          ./scripts/config --file out/.config -e DISPLAY_USE_INFO
+          ./scripts/config --file out/.config -d SECURITY_SELINUX_ALWAYS_ENFORCE
           ./scripts/config --file out/.config -e MODULES
           ./scripts/config --file out/.config -e CFG80211
           ./scripts/config --file out/.config -e MAC80211
@@ -70,15 +69,15 @@ jobs:
           cd kernel_source
           make O=out olddefconfig
           sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE=y/# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set/g' out/.config || true
-          make O=out -j$(nproc --all) KCFLAGS="-Wno-error -fno-pic"
+          make O=out -j$(nproc --all) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error -fno-pic"
 
       - name: 6. Empaquetar Image
         run: |
           cp kernel_source/out/arch/arm64/boot/Image ./Image
-          zip -r9 NetHunter-J701M-Kernel-Clean.zip Image
+          zip -r9 NetHunter-J701M-Kernel-Final.zip Image
 
       - name: 7. Subir Artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-J701M-Kernel-Clean
-          path: NetHunter-J701M-Kernel-Clean.zip
+          name: NetHunter-J701M-Kernel-Final
+          path: NetHunter-J701M-Kernel-Final.zip
