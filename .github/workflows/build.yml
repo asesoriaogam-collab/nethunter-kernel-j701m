@@ -100,4 +100,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NetHunter-J701M-Clean-Image
-          path: NetHunter-J701M-Kernel-Clean.zip
+          path: NetHunter-J701M-Clean-Image.zip
