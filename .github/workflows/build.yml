@@ -45,11 +45,12 @@ jobs:
           sed -i '1i #ifndef PANEL_STATE_RESUMED\n#define PANEL_STATE_RESUMED 0\n#define PANEL_STATE_SUSPENED 1\n#define PANEL_STATE_SUSPENDING 2\n#endif' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
 
           # Ajustar flags en .config
+          chmod -R +x scripts/
           ./scripts/config --file out/.config -e SECURITY_SELINUX_DEVELOP
           ./scripts/config --file out/.config -d SECURITY_SELINUX_ALWAYS_ENFORCE
           ./scripts/config --file out/.config -d ALWAYS_ENFORCE
           ./scripts/config --file out/.config -e SECURITY_SELINUX_ALWAYS_PERMISSIVE
-          ./scripts/config --file out/.config -d DISPLAY_USE_INFO
+          ./scripts/config --file out/.config -e DISPLAY_USE_INFO
           ./scripts/config --file out/.config -e MODULES
           ./scripts/config --file out/.config -e CFG80211
           ./scripts/config --file out/.config -e MAC80211
