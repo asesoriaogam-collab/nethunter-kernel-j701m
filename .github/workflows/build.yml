@@ -23,12 +23,17 @@ jobs:
           git clone --depth=1 https://github.com/Astrako/android_kernel_samsung_exynos7870.git -b simple-kernel kernel_source || git clone --depth=1 https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel_source
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
 
-      - name: 4. Reparar Kconfig, DTC (yylloc) e Inyectar Drivers Wi-Fi Externos
+      - name: 4. Reparar Kconfig, DTC y Parches Wi-Fi
         run: |
           cp j7velte_nethunter_defconfig kernel_source/arch/arm64/configs/j7velte_nh_defconfig
           cd kernel_source
 
-          # Corregir error de multiple definition of yylloc en scripts/dtc con GCC 10+
+          # Limpiar banderas fuera de arbol que rompen Kconfig
+          sed -i '/CONFIG_RTL8812AU/d' arch/arm64/configs/j7velte_nh_defconfig || true
+          sed -i '/CONFIG_88XXAU/d' arch/arm64/configs/j7velte_nh_defconfig || true
+          sed -i '/CONFIG_RTL8188FU/d' arch/arm64/configs/j7velte_nh_defconfig || true
+
+          # Corregir multiple definition of yylloc en scripts/dtc
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.l || true
           sed -i 's/HOSTCFLAGS   = -Wall/HOSTCFLAGS   = -Wall -fcommon/g' Makefile || true
@@ -37,19 +42,12 @@ jobs:
           sed -i 's|source "net/wireguard/Kconfig"|# source "net/wireguard/Kconfig"|g' net/Kconfig || true
           sed -i '/wireguard/d' net/Makefile || true
 
-          # Evitar el signo '+' en la version del kernel y parchar inyeccion en mac80211
+          # Eliminar -Werror en todos los Makefiles para que warnings no frenen la compilacion
+          find . -type f -name "Makefile*" -exec sed -i 's/-Werror//g' {} + || true
+
+          # Evitar signo '+' y habilitar inyeccion de paquetes en mac80211
           sed -i 's/echo "+"/#echo "+"/g' scripts/setlocalversion || true
           sed -i 's/IEEE80211_TX_CTL_REQ_TX_STATUS/IEEE80211_TX_CTL_REQ_TX_STATUS | IEEE80211_TX_CTL_INJECTED/g' net/mac80211/tx.c || true
-
-          # 4.1 Inyectar RTL8188EUS de Aircrack-ng (TP-Link TL-WN722N v2/v3, TL-WN725N)
-          rm -rf drivers/staging/rtl8188eu
-          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git drivers/staging/rtl8188eu
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/staging/rtl8188eu/Makefile || true
-          sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' drivers/staging/rtl8188eu/Makefile || true
-          echo "EXTRA_CFLAGS += -Wno-error -Wno-incompatible-pointer-types" >> drivers/staging/rtl8188eu/Makefile
-          if ! grep -q "rtl8188eu" drivers/staging/Makefile; then
-            echo 'obj-$(CONFIG_8188EU) += rtl8188eu/' >> drivers/staging/Makefile
-          fi
 
       - name: 5. Compilar el Kernel (arm64)
         run: |
@@ -61,7 +59,7 @@ jobs:
           cd kernel_source
           make O=out HOSTCFLAGS="-fcommon -Wno-error" j7velte_nh_defconfig
           make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
-          make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error" -j$(nproc --all)
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error" -j$(nproc --all) || make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error" -j1
 
       - name: 6. Empaquetar con AnyKernel3 para OrangeFox
         run: |
