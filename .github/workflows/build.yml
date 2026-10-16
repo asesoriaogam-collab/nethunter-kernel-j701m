@@ -18,134 +18,34 @@ jobs:
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses-dev lib32z1-dev liblz4-tool libncurses-dev libssl-dev libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python2
           sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: 3. Clonar Kernel Tree (Exynos 7870 Treble) y Toolchain GCC 4.9
+      - name: 3. Clonar Kernel Tree (H-Kernel / Exynos 7870) y Toolchain GCC 4.9
         run: |
           git clone --depth=1 https://github.com/Astrako/android_kernel_samsung_exynos7870.git -b simple-kernel kernel_source || git clone --depth=1 https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel_source
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
 
-      - name: 4. Unir defconfig nativo del arbol + Todos los Drivers Wi-Fi Universales
+      - name: 4. Usar tu j7velte_actual_defconfig + Parches GPU r12p0 y Wi-Fi
         run: |
+          cp j7velte_nethunter_defconfig kernel_source/arch/arm64/configs/j7velte_nh_defconfig
           cd kernel_source
 
-          # 4.1 Localizar el defconfig nativo de j7velte dentro del propio arbol para que coincida la GPU Mali
-          BASE_DEFCONFIG=$(find arch/arm64/configs -name "*j7velte*" | head -n 1)
-          echo "Usando base nativa del arbol: $BASE_DEFCONFIG"
-          cp "$BASE_DEFCONFIG" arch/arm64/configs/j7velte_nh_defconfig
-
-          # 4.2 Agregar todos los drivers Wi-Fi USB de todas las marcas + OTG al defconfig nativo
-          cat << 'WIFI_EOF' >> arch/arm64/configs/j7velte_nh_defconfig
-          CONFIG_LOCALVERSION="-NetHunter-J701M-AllWiFi"
-          CONFIG_CC_STACKPROTECTOR_REGULAR=y
-          # CONFIG_CC_STACKPROTECTOR_STRONG is not set
-          # CONFIG_IPV6_VTI is not set
-          # CONFIG_NET_IPVTI is not set
-          CONFIG_MODULES=y
-          CONFIG_MODULE_FORCE_LOAD=y
-          CONFIG_MODULE_UNLOAD=y
-          CONFIG_MODULE_FORCE_UNLOAD=y
-          CONFIG_CFG80211=y
-          CONFIG_CFG80211_WEXT=y
-          CONFIG_MAC80211=y
-          CONFIG_MAC80211_MESH=y
-          CONFIG_MAC80211_LEDS=y
-          CONFIG_WIRELESS_EXT=y
-          CONFIG_WEXT_CORE=y
-          CONFIG_WEXT_PROC=y
-          CONFIG_WEXT_SPY=y
-          CONFIG_WEXT_PRIV=y
-          CONFIG_EEPROM_93CX6=y
-          CONFIG_USB_HOST_NOTIFY=y
-          CONFIG_USB_DWC3=y
-          CONFIG_USB_DWC3_DUAL_ROLE=y
-          CONFIG_USB_DWC3_EXYNOS=y
-          CONFIG_USB_ACM=y
-          CONFIG_USB_SERIAL=y
-          CONFIG_USB_WDM=y
-          CONFIG_WLAN_VENDOR_ATH=y
-          CONFIG_ATH_COMMON=y
-          CONFIG_ATH_CARDS=y
-          CONFIG_ATH9K_HW=y
-          CONFIG_ATH9K_COMMON=y
-          CONFIG_ATH9K=y
-          CONFIG_ATH9K_HTC=y
-          CONFIG_CARL9170=y
-          CONFIG_CARL9170_LEDS=y
-          CONFIG_CARL9170_WPC=y
-          CONFIG_ATH6KL=y
-          CONFIG_ATH6KL_USB=y
-          CONFIG_AR5523=y
-          CONFIG_WLAN_VENDOR_REALTEK=y
-          CONFIG_RTL8187=y
-          CONFIG_RTL8187_LEDS=y
-          CONFIG_RTL_CARDS=y
-          CONFIG_RTL8192CU=y
-          CONFIG_RTLWIFI=y
-          CONFIG_RTLWIFI_USB=y
-          CONFIG_RTL8192C_COMMON=y
-          CONFIG_RTL8XXXU=y
-          CONFIG_RTL8XXXU_UNTESTED=y
-          CONFIG_STAGING=y
-          CONFIG_R8712U=y
-          CONFIG_R8188EU=y
-          CONFIG_88EU_AP_MODE=y
-          CONFIG_8188EU=y
-          CONFIG_WLAN_VENDOR_RALINK=y
-          CONFIG_RT2X00=y
-          CONFIG_RT2500USB=y
-          CONFIG_RT73USB=y
-          CONFIG_RT2800USB=y
-          CONFIG_RT2800USB_RT33XX=y
-          CONFIG_RT2800USB_RT35XX=y
-          CONFIG_RT2800USB_RT3573=y
-          CONFIG_RT2800USB_RT53XX=y
-          CONFIG_RT2800USB_RT55XX=y
-          CONFIG_RT2800USB_UNKNOWN=y
-          CONFIG_WLAN_VENDOR_MEDIATEK=y
-          CONFIG_MT7601U=y
-          CONFIG_WLAN_VENDOR_ZYDAS=y
-          CONFIG_USB_ZD1201=y
-          CONFIG_ZD1211RW=y
-          CONFIG_WLAN_VENDOR_MARVELL=y
-          CONFIG_LIBERTAS=y
-          CONFIG_LIBERTAS_USB=y
-          CONFIG_LIBERTAS_THINFIRM=y
-          CONFIG_LIBERTAS_THINFIRM_USB=y
-          CONFIG_MWIFIEX=y
-          CONFIG_MWIFIEX_USB=y
-          CONFIG_BRCMFMAC=y
-          CONFIG_BRCMFMAC_USB=y
-          CONFIG_WLAN_VENDOR_INTERSIL=y
-          CONFIG_P54_COMMON=y
-          CONFIG_P54_USB=y
-          CONFIG_WLAN_VENDOR_ATMEL=y
-          CONFIG_AT76C50X_USB=y
-          CONFIG_USB_NET_RNDIS_WLAN=y
-          CONFIG_USB_RTL8150=y
-          CONFIG_USB_RTL8152=y
-          CONFIG_USB_NET_AX8817X=y
-          CONFIG_USB_NET_AX88179_178A=y
-          CONFIG_USB_NET_CDCETHER=y
-          CONFIG_USB_NET_RNDIS_HOST=y
-          CONFIG_BT_HCIBTUSB=y
-          WIFI_EOF
-
-          # 4.3 Reparar Makefile (cambiar -Werror-implicit-function-declaration por warning sin cortar la palabra)
+          # 4.1 Reparar error en GPU r12p0 (dev_pm_opp_of_add_table) manteniendo intacto el driver grafico original
+          sed -i '1i #include <linux/pm_opp.h>' drivers/gpu/arm/t83x/r12p0/mali_kbase_core_linux.c || true
           sed -i 's/-Werror-implicit-function-declaration/-Wno-implicit-function-declaration/g' Makefile || true
           sed -i 's/-Werror=implicit-function-declaration/-Wno-implicit-function-declaration/g' Makefile || true
           sed -i 's/ip6_update_pmtu(skb, net, htons(mtu), 0, 0);/ip6_update_pmtu(skb, net, htons(mtu), 0, 0, 0);/g' net/ipv6/ip6_vti.c || true
 
-          # 4.4 Corregir multiple definition of yylloc en scripts/dtc
+          # 4.2 Corregir multiple definition of yylloc en scripts/dtc
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.l || true
           sed -i 's/HOSTCFLAGS   = -Wall/HOSTCFLAGS   = -Wall -fcommon/g' Makefile || true
 
-          # 4.5 Corregir net/wireguard/Kconfig y parchar inyeccion mac80211
+          # 4.3 Corregir net/wireguard/Kconfig y parchar inyeccion mac80211
           sed -i 's|source "net/wireguard/Kconfig"|# source "net/wireguard/Kconfig"|g' net/Kconfig || true
           sed -i '/wireguard/d' net/Makefile || true
           sed -i 's/echo "+"/#echo "+"/g' scripts/setlocalversion || true
           sed -i 's/IEEE80211_TX_CTL_REQ_TX_STATUS/IEEE80211_TX_CTL_REQ_TX_STATUS | IEEE80211_TX_CTL_INJECTED/g' net/mac80211/tx.c || true
 
-          # 4.6 Inyectar driver Aircrack-ng RTL8188EUS (Modo Monitor + Inyeccion para TP-Link TL-WN722N v2/v3)
+          # 4.4 Inyectar driver Aircrack-ng RTL8188EUS (TP-Link TL-WN722N v2/v3)
           rm -rf drivers/staging/rtl8188eu
           git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git drivers/staging/rtl8188eu
           sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/staging/rtl8188eu/Makefile || true
@@ -167,13 +67,36 @@ jobs:
           make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
           make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j$(nproc --all) || make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j1
 
-      - name: 6. Empaquetar con AnyKernel3 para OrangeFox
+      - name: 6. Empaquetar con AnyKernel3 para OrangeFox (mmcblk0p10 directo)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           cp kernel_source/out/arch/arm64/boot/Image AnyKernel3/
           mkdir -p AnyKernel3/modules/system/lib/modules
           find kernel_source/out -name "*.ko" -exec cp {} AnyKernel3/modules/system/lib/modules/ \; 2>/dev/null || true
-          printf "# AnyKernel3 Ramdisk Mod Script\nproperties() { '\nkernel.string=Kali NetHunter All-WiFi Kernel SM-J701M\ndo.devicecheck=1\ndo.modules=0\ndo.systemless=1\ndo.cleanup=1\ndo.cleanuponabort=0\ndevice.name1=j7velte\ndevice.name2=j7veltedx\ndevice.name3=SM-J701M\ndevice.name4=j7xeltexx\n'; }\nblock=/dev/block/platform/13540000.dwmmc0/by-name/BOOT;\nis_slot_device=0;\nramdisk_compression=auto;\n. tools/ak3-core.sh;\ndump_boot;\nwrite_boot;\n" > AnyKernel3/anykernel.sh
+          cat << 'AK_EOF' > AnyKernel3/anykernel.sh
+          # AnyKernel3 Ramdisk Mod Script
+          properties() { '
+          kernel.string=Kali NetHunter All-WiFi Kernel SM-J701M
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=j7velte
+          device.name2=j7veltedx
+          device.name3=SM-J701M
+          device.name4=j7xeltexx
+          '; }
+          block=/dev/block/mmcblk0p10;
+          is_slot_device=0;
+          ramdisk_compression=auto;
+          . tools/ak3-core.sh;
+          block=/dev/block/mmcblk0p10;
+          BLOCK=/dev/block/mmcblk0p10;
+          dump_boot;
+          write_boot;
+          AK_EOF
+          sed -i 's/^          //' AnyKernel3/anykernel.sh
           cd AnyKernel3
           rm -rf .git README.md
           zip -r9 ../NetHunter-J701M-AllWiFi-AnyKernel3.zip *
