@@ -38,6 +38,8 @@ jobs:
           sed -i 's/-Wno-logical-not-parentheses//g' Makefile || true
           find drivers/video/fbdev/exynos -name "Makefile*" -exec sed -i 's/-Werror//g' {} + || true
           sed -i 's/ip6_update_pmtu(skb, net, htons(mtu), 0, 0);/ip6_update_pmtu(skb, net, htons(mtu), 0, 0, 0);/g' net/ipv6/ip6_vti.c || true
+          # Reparar undefined symbol insert_data_kfifo_kthread al enlazar vmlinux
+          sed -i 's/insert_data_kfifo_kthread/\/\/ insert_data_kfifo_kthread/g' net/ipv4/af_inet.c net/ipv6/af_inet6.c || true
 
           # 4.3 Corregir multiple definition of yylloc en scripts/dtc
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
@@ -75,6 +77,7 @@ jobs:
           echo "# CONFIG_MALI_R12P0 is not set" >> out/.config
           echo "# CONFIG_MALI_R29P0 is not set" >> out/.config
           echo "# CONFIG_DISPLAY_USE_INFO is not set" >> out/.config
+          echo "# CONFIG_SOCKEV_NPA is not set" >> out/.config
           make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
           make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j$(nproc --all) || make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j1
 
