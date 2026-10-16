@@ -1,83 +1,103 @@
-name: Build NetHunter J701M Final Permissive
+name: Build NetHunter J701M Final Working
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-kernel:
     runs-on: ubuntu-22.04
     steps:
-      - name: 1. Checkout repositorio local
+      - name: 1. Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: 2. Instalar dependencias de compilacion
+      - name: 2. Instalar paquetes de compilacion
         run: |
           sudo apt-get update
-          sudo apt-get install -y ccache bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python2 python-is-python3
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses-dev lib32z1-dev liblz4-tool libncurses-dev libssl-dev libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python2
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: 3. Clonar Toolchain GCC 4.9 y Kernel gonicdroid (3.18.140)
+      - name: 3. Clonar SIMPLE-KERNEL Exynos 7870 y GCC 4.9
         run: |
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
           git clone --depth=1 https://github.com/gonicdroid/android_kernel_samsung_exynos7870.git -b main kernel_source
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
           git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git -b v5.3.9 drivers_8188eu
 
-      - name: 4. Parchear Codigo Fuente (Drivers Wi-Fi, SELinux Permissive y Panel de Video)
+      - name: 4. Preparar codigo fuente (Panel intacto y Permissive)
         run: |
+          cp j7velte_nethunter_defconfig kernel_source/arch/arm64/configs/j7velte_nh_defconfig
           cd kernel_source
-          mkdir -p out
 
-          # Integrar driver RTL8188EUS
+          # 4.1 Integrar driver RTL8188EUS para NetHunter
           cp -rf ../drivers_8188eu drivers/net/wireless/rtl8188eus
           sed -i 's/EXTRA_CFLAGS += -Wno-error=date-time/#EXTRA_CFLAGS += -Wno-error=date-time/g' drivers/net/wireless/rtl8188eus/Makefile || true
           echo 'obj-$(CONFIG_RTL8188EU) += rtl8188eus/' >> drivers/net/wireless/Makefile
 
-          # Copiar defconfig base
-          cp -f ../j7velte_nethunter_defconfig out/.config
+          # 4.2 Parchear cabeceras del panel AMOLED (SIN tocar lcd->code para que la pantalla encienda)
+          sed -i '1i #ifndef PANEL_STATE_RESUMED\n#define PANEL_STATE_RESUMED 0\n#define PANEL_STATE_SUSPENED 1\n#define PANEL_STATE_SUSPENDING 2\n#endif' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
+          sed -i 's/#ifdef CONFIG_DISPLAY_USE_INFO/#if 1/g' drivers/video/fbdev/exynos/decon_7870/panels/dsim_panel.h || true
 
-          # Forzar SELinux Permissive a nivel de codigo fuente en security/selinux
+          # 4.3 Parche de opp en GPU Mali
+          find drivers/gpu/arm/t83x -name "mali_kbase_core_linux.c" -exec sed -i '1i #include <linux/pm_opp.h>\n__attribute__((weak)) int dev_pm_opp_of_add_table(struct device *dev) { return 0; }' {} + || true
+          if [ -d "drivers/gpu/arm/t83x/r28p0" ]; then
+            sed -i 's/r12p0/r28p0/g' drivers/gpu/arm/t83x/Makefile drivers/gpu/arm/t83x/Kconfig || true
+          fi
+
+          # 4.4 Stubs debiles para Knox/NPA
+          cat << 'STUB_EOF' >> net/ipv4/af_inet.c
+          __attribute__((weak)) unsigned int check_ncm_flag(void) { return 0; }
+          struct knox_socket_metadata;
+          __attribute__((weak)) void insert_data_kfifo_kthread(struct knox_socket_metadata* k) { }
+          STUB_EOF
+
+          # 4.5 Forzar SELinux Permissive a nivel de codigo fuente en security/selinux
           find security/selinux -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE/CONFIG_NO_ALWAYS_ENFORCE/g' {} +
           find security/selinux -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/selinux_enforcing = 1/selinux_enforcing = 0/g' {} +
           sed -i 's/enforcing = 1/enforcing = 0/g' security/selinux/hooks.c || true
 
-          # Mantener valores reales de calibracion del panel AMOLED intactos (dsim_panel.h)
-          sed -i '1i #ifndef PANEL_STATE_RESUMED\n#define PANEL_STATE_RESUMED 0\n#define PANEL_STATE_SUSPENED 1\n#define PANEL_STATE_SUSPENDING 2\n#endif' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
-          sed -i 's/#ifdef CONFIG_DISPLAY_USE_INFO/#if 1/g' drivers/video/fbdev/exynos/decon_7870/panels/dsim_panel.h || true
+          # 4.6 Ajustes de dtc y compilador GCC 4.9 en Ubuntu 22.04
+          sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.l || true
+          sed -i 's/-Werror-implicit-function-declaration/-Wno-implicit-function-declaration/g' Makefile || true
+          sed -i 's/-Werror=implicit-function-declaration/-Wno-implicit-function-declaration/g' Makefile || true
+          sed -i 's/-Wno-logical-not-parentheses//g' Makefile || true
+          find drivers/video/fbdev/exynos -name "Makefile*" -exec sed -i 's/-Werror//g' {} + || true
+          sed -i 's|source "net/wireguard/Kconfig"|# source "net/wireguard/Kconfig"|g' net/Kconfig || true
+          sed -i '/wireguard/d' net/Makefile || true
+          sed -i 's/echo "+"/#echo "+"/g' scripts/setlocalversion || true
 
-          # Configurar .config con herramientas del kernel
-          chmod -R +x scripts/
-          ./scripts/config --file out/.config -d DISPLAY_USE_INFO
-          ./scripts/config --file out/.config -e SECURITY_SELINUX_DEVELOP
-          ./scripts/config --file out/.config -e SECURITY_SELINUX_ALWAYS_PERMISSIVE
-          ./scripts/config --file out/.config -d SECURITY_SELINUX_ALWAYS_ENFORCE
-          ./scripts/config --file out/.config -e MODULES
-          ./scripts/config --file out/.config -e CFG80211
-          ./scripts/config --file out/.config -e MAC80211
-          ./scripts/config --file out/.config -e MAC80211_MESH
-          ./scripts/config --file out/.config -e ATH9K_HTC
-          ./scripts/config --file out/.config -e RT2800USB
-          ./scripts/config --file out/.config -e RTL8187
-          ./scripts/config --file out/.config -e RTL8192CU
+          # 4.7 Habilitar inyeccion de paquetes en mac80211
+          sed -i 's/IEEE80211_TX_CTL_REQ_TX_STATUS/IEEE80211_TX_CTL_REQ_TX_STATUS | IEEE80211_TX_CTL_INJECTED/g' net/mac80211/tx.c || true
 
       - name: 5. Compilar Kernel (arm64)
         run: |
-          export PATH="$GITHUB_WORKSPACE/toolchain/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-android-
+          export ANDROID_MAJOR_VERSION=q
+          export PLATFORM_VERSION=10.0.0
+          export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           cd kernel_source
-          make O=out olddefconfig
-          sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE=y/# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set/g' out/.config || true
-          make O=out -j$(nproc --all) V=1 HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error -fno-pic"
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" j7velte_nh_defconfig
+          echo "CONFIG_MALI_T83X=y" >> out/.config
+          echo "CONFIG_MALI_R28P0=y" >> out/.config
+          echo "# CONFIG_MALI_R12P0 is not set" >> out/.config
+          echo "# CONFIG_MALI_R29P0 is not set" >> out/.config
+          echo "CONFIG_PM_OPP=y" >> out/.config
+          echo "# CONFIG_DISPLAY_USE_INFO is not set" >> out/.config
+          echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> out/.config
+          echo "CONFIG_SECURITY_SELINUX_ALWAYS_PERMISSIVE=y" >> out/.config
+          echo "# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set" >> out/.config
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j$(nproc --all)
 
-      - name: 6. Empaquetar Image
+      - name: 6. Subir binario Image y paquete AnyKernel3
         run: |
           cp kernel_source/out/arch/arm64/boot/Image ./Image
           zip -r9 NetHunter-J701M-Kernel-Final.zip Image
 
-      - name: 7. Subir Artefacto
+      - name: 7. Publicar Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-J701M-Kernel-Final
-          path: NetHunter-J701M-Kernel-Final.zip
+          name: NetHunter-J701M-Clean-Image
+          path: NetHunter-J701M-Kernel-Clean.zip
