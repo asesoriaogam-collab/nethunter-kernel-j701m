@@ -69,7 +69,7 @@ jobs:
           cd kernel_source
           make O=out olddefconfig
           sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE=y/# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set/g' out/.config || true
-          make O=out -j$(nproc --all) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error -fno-pic"
+          make O=out -j$(nproc --all) V=1 HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error -fno-pic"
 
       - name: 6. Empaquetar Image
         run: |
