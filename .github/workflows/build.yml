@@ -31,8 +31,9 @@ jobs:
           # 4.1 Reparar struct lcd_info->code, macros check_ncm_flag e insert_data_kfifo_kthread
           sed -i 's/lcd->code\[[0-9]\]/0/g' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
           find drivers/gpu/arm/t83x -name "mali_kbase_core_linux.c" -exec sed -i '1i #include <linux/pm_opp.h>' {} + || true
-          sed -i '1i #define check_ncm_flag(...) 1' net/ipv4/af_inet.c || true
-          sed -i '1i #define insert_data_kfifo_kthread(...) do {} while(0)' net/ipv4/af_inet.c net/ipv6/af_inet6.c || true
+          # Comentar llamadas a funciones huérfanas de Knox/NCM en af_inet.c y af_inet6.c
+          sed -i '/check_ncm_flag/s/^/\/\//' net/ipv4/af_inet.c net/ipv6/af_inet6.c || true
+          sed -i '/insert_data_kfifo_kthread/s/^/\/\//' net/ipv4/af_inet.c net/ipv6/af_inet6.c || true
 
           # 4.2 Limpiar flags que detienen GCC 4.9
           sed -i 's/-Werror-implicit-function-declaration/-Wno-implicit-function-declaration/g' Makefile || true
