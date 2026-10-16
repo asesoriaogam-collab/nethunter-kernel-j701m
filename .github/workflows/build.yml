@@ -23,12 +23,17 @@ jobs:
           git clone --depth=1 https://github.com/Astrako/android_kernel_samsung_exynos7870.git -b simple-kernel kernel_source || git clone --depth=1 https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel_source
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
 
-      - name: 4. Reparar Kconfig e Inyectar Drivers Externos (TP-Link / Alfa / Realtek)
+      - name: 4. Reparar Kconfig, DTC (yylloc) e Inyectar Drivers Wi-Fi Externos
         run: |
           cp j7velte_nethunter_defconfig kernel_source/arch/arm64/configs/j7velte_nh_defconfig
           cd kernel_source
 
-          # Corregir error de net/wireguard/Kconfig faltante en el arbol de Astrako
+          # Corregir error de multiple definition of yylloc en scripts/dtc con GCC 10+
+          sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.l || true
+          sed -i 's/HOSTCFLAGS   = -Wall/HOSTCFLAGS   = -Wall -fcommon/g' Makefile || true
+
+          # Corregir error de net/wireguard/Kconfig faltante
           sed -i 's|source "net/wireguard/Kconfig"|# source "net/wireguard/Kconfig"|g' net/Kconfig || true
           sed -i '/wireguard/d' net/Makefile || true
 
@@ -46,15 +51,6 @@ jobs:
             echo 'obj-$(CONFIG_8188EU) += rtl8188eu/' >> drivers/staging/Makefile
           fi
 
-          # 4.2 Inyectar RTL8812AU / RTL8821AU de Aircrack-ng (TP-Link Archer T2U/T4U, Alfa AWUS036ACH)
-          rm -rf drivers/net/wireless/realtek/rtl8812au
-          if git clone --depth=1 -b v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git drivers/staging/rtl8812au; then
-            sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/staging/rtl8812au/Makefile || true
-            sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' drivers/staging/rtl8812au/Makefile || true
-            sed -i 's/-Werror//g' drivers/staging/rtl8812au/Makefile || true
-            echo "EXTRA_CFLAGS += -Wno-error" >> drivers/staging/rtl8812au/Makefile
-          fi
-
       - name: 5. Compilar el Kernel (arm64)
         run: |
           export ARCH=arm64
@@ -63,9 +59,9 @@ jobs:
           export PLATFORM_VERSION=10.0.0
           export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           cd kernel_source
-          make O=out j7velte_nh_defconfig
-          make O=out olddefconfig
-          make O=out -j$(nproc --all)
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" j7velte_nh_defconfig
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
+          make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error" -j$(nproc --all)
 
       - name: 6. Empaquetar con AnyKernel3 para OrangeFox
         run: |
