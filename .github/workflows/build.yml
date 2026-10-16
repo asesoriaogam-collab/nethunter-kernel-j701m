@@ -92,6 +92,13 @@ jobs:
           echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> out/.config
           echo "CONFIG_SECURITY_SELINUX_ALWAYS_PERMISSIVE=y" >> out/.config
           echo "# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set" >> out/.config
+          
+          # Forzar SELinux Permissive global en el kernel
+          sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE=y/# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set/g' out/.config || true
+          ./scripts/config --file out/.config -e SECURITY_SELINUX_DEVELOP
+          ./scripts/config --file out/.config -e SECURITY_SELINUX_ALWAYS_PERMISSIVE
+          ./scripts/config --file out/.config -d SECURITY_SELINUX_ALWAYS_ENFORCE
+
           make O=out HOSTCFLAGS="-fcommon -Wno-error" olddefconfig
           make O=out HOSTCFLAGS="-fcommon -Wno-error" KCFLAGS="-Wno-error -Wno-implicit-function-declaration" -j$(nproc --all)
 
