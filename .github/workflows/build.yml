@@ -51,6 +51,13 @@ jobs:
           __attribute__((weak)) void insert_data_kfifo_kthread(struct knox_socket_metadata* k) { }
           STUB_EOF
 
+          
+          # Parche radical: Forzar selinux_enforcing a 0 permanentemente en el nucleo de SELinux
+          sed -i 's/selinux_enforcing = 1/selinux_enforcing = 0/g' security/selinux/hooks.c || true
+          sed -i 's/__initdata enforcing = 1/__initdata enforcing = 0/g' security/selinux/selinuxfs.c || true
+          sed -i 's/enforcing = *1;/enforcing = 0;/g' security/selinux/hooks.c || true
+          find security/selinux -type f -name "*.c" -exec sed -i 's/int enforcing = 1/int enforcing = 0/g' {} + || true
+
           # 4.5 Forzar SELinux Permissive a nivel de codigo fuente en security/selinux
           find security/selinux -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE/CONFIG_NO_ALWAYS_ENFORCE/g' {} +
           find security/selinux -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/selinux_enforcing = 1/selinux_enforcing = 0/g' {} +
