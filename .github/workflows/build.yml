@@ -24,7 +24,7 @@ jobs:
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
           git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git -b v5.3.9 drivers_8188eu
 
-      - name: 4. Preparar codigo fuente (Panel intacto y Permissive)
+      - name: 4. Preparar codigo fuente (Panel INTACTO y Permissive)
         run: |
           cp j7velte_nethunter_defconfig kernel_source/arch/arm64/configs/j7velte_nh_defconfig
           cd kernel_source
@@ -34,7 +34,7 @@ jobs:
           sed -i 's/EXTRA_CFLAGS += -Wno-error=date-time/#EXTRA_CFLAGS += -Wno-error=date-time/g' drivers/net/wireless/rtl8188eus/Makefile || true
           echo 'obj-$(CONFIG_RTL8188EU) += rtl8188eus/' >> drivers/net/wireless/Makefile
 
-          # 4.2 Parchear cabeceras del panel AMOLED (SIN tocar lcd->code para que la pantalla encienda)
+          # 4.2 Parchear cabeceras del panel AMOLED - MANTENIENDO lcd->code ORIGINAL INTACTO
           sed -i '1i #ifndef PANEL_STATE_RESUMED\n#define PANEL_STATE_RESUMED 0\n#define PANEL_STATE_SUSPENED 1\n#define PANEL_STATE_SUSPENDING 2\n#endif' drivers/video/fbdev/exynos/decon_7870/panels/ea8061s_j7lite_lcd_ctrl.c || true
           sed -i 's/#ifdef CONFIG_DISPLAY_USE_INFO/#if 1/g' drivers/video/fbdev/exynos/decon_7870/panels/dsim_panel.h || true
 
@@ -94,10 +94,10 @@ jobs:
       - name: 6. Subir binario Image y paquete AnyKernel3
         run: |
           cp kernel_source/out/arch/arm64/boot/Image ./Image
-          zip -r9 NetHunter-J701M-Kernel-Final.zip Image
+          zip -r9 NetHunter-J701M-PanelFixed.zip Image
 
       - name: 7. Publicar Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-J701M-Clean-Image
-          path: NetHunter-J701M-Clean-Image.zip
+          name: NetHunter-J701M-PanelFixed
+          path: NetHunter-J701M-PanelFixed.zip
