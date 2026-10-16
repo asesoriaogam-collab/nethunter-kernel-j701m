@@ -1,4 +1,4 @@
-name: Compilar Kernel NetHunter J701M
+name: Compilar Kernel NetHunter J701M Universal
 
 on:
   push:
@@ -23,17 +23,44 @@ jobs:
           git clone --depth=1 https://github.com/Astrako/android_kernel_samsung_exynos7870.git -b simple-kernel kernel_source || git clone --depth=1 https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel_source
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
 
-      - name: 4. Aplicar parche de inyeccion Wi-Fi (mac80211) y cargar defconfig
+      - name: 4. Reparar Kconfig e Inyectar Drivers Externos (TP-Link / Alfa / Realtek)
         run: |
           cp j7velte_nethunter_defconfig kernel_source/arch/arm64/configs/j7velte_nh_defconfig
           cd kernel_source
+
+          # Corregir error de net/wireguard/Kconfig faltante en el arbol de Astrako
+          sed -i 's|source "net/wireguard/Kconfig"|# source "net/wireguard/Kconfig"|g' net/Kconfig || true
+          sed -i '/wireguard/d' net/Makefile || true
+
+          # Evitar el signo '+' en la version del kernel y parchar inyeccion en mac80211
           sed -i 's/echo "+"/#echo "+"/g' scripts/setlocalversion || true
           sed -i 's/IEEE80211_TX_CTL_REQ_TX_STATUS/IEEE80211_TX_CTL_REQ_TX_STATUS | IEEE80211_TX_CTL_INJECTED/g' net/mac80211/tx.c || true
+
+          # 4.1 Inyectar RTL8188EUS de Aircrack-ng (TP-Link TL-WN722N v2/v3, TL-WN725N)
+          rm -rf drivers/staging/rtl8188eu
+          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git drivers/staging/rtl8188eu
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/staging/rtl8188eu/Makefile || true
+          sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' drivers/staging/rtl8188eu/Makefile || true
+          echo "EXTRA_CFLAGS += -Wno-error -Wno-incompatible-pointer-types" >> drivers/staging/rtl8188eu/Makefile
+          if ! grep -q "rtl8188eu" drivers/staging/Makefile; then
+            echo 'obj-$(CONFIG_8188EU) += rtl8188eu/' >> drivers/staging/Makefile
+          fi
+
+          # 4.2 Inyectar RTL8812AU / RTL8821AU de Aircrack-ng (TP-Link Archer T2U/T4U, Alfa AWUS036ACH)
+          rm -rf drivers/net/wireless/realtek/rtl8812au
+          if git clone --depth=1 -b v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git drivers/staging/rtl8812au; then
+            sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/staging/rtl8812au/Makefile || true
+            sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' drivers/staging/rtl8812au/Makefile || true
+            sed -i 's/-Werror//g' drivers/staging/rtl8812au/Makefile || true
+            echo "EXTRA_CFLAGS += -Wno-error" >> drivers/staging/rtl8812au/Makefile
+          fi
 
       - name: 5. Compilar el Kernel (arm64)
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
+          export ANDROID_MAJOR_VERSION=q
+          export PLATFORM_VERSION=10.0.0
           export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           cd kernel_source
           make O=out j7velte_nh_defconfig
@@ -44,13 +71,15 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           cp kernel_source/out/arch/arm64/boot/Image AnyKernel3/
-          printf "# AnyKernel3 Ramdisk Mod Script\nproperties() { '\nkernel.string=Kali NetHunter Kernel SM-J701M (Exynos 7870)\ndo.devicecheck=1\ndo.modules=0\ndo.systemless=1\ndo.cleanup=1\ndo.cleanuponabort=0\ndevice.name1=j7velte\ndevice.name2=j7veltedx\ndevice.name3=SM-J701M\ndevice.name4=j7xeltexx\n'; }\nblock=/dev/block/platform/13540000.dwmmc0/by-name/BOOT;\nis_slot_device=0;\nramdisk_compression=auto;\n. tools/ak3-core.sh;\ndump_boot;\nwrite_boot;\n" > AnyKernel3/anykernel.sh
+          mkdir -p AnyKernel3/modules/system/lib/modules
+          find kernel_source/out -name "*.ko" -exec cp {} AnyKernel3/modules/system/lib/modules/ \; 2>/dev/null || true
+          printf "# AnyKernel3 Ramdisk Mod Script\nproperties() { '\nkernel.string=Kali NetHunter All-WiFi Kernel SM-J701M\ndo.devicecheck=1\ndo.modules=0\ndo.systemless=1\ndo.cleanup=1\ndo.cleanuponabort=0\ndevice.name1=j7velte\ndevice.name2=j7veltedx\ndevice.name3=SM-J701M\ndevice.name4=j7xeltexx\n'; }\nblock=/dev/block/platform/13540000.dwmmc0/by-name/BOOT;\nis_slot_device=0;\nramdisk_compression=auto;\n. tools/ak3-core.sh;\ndump_boot;\nwrite_boot;\n" > AnyKernel3/anykernel.sh
           cd AnyKernel3
           rm -rf .git README.md
-          zip -r9 ../NetHunter-J701M-Exynos7870-AnyKernel3.zip *
+          zip -r9 ../NetHunter-J701M-AllWiFi-AnyKernel3.zip *
 
       - name: 7. Subir el ZIP listo para descargar
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-J701M-AnyKernel3-ZIP
-          path: NetHunter-J701M-Exynos7870-AnyKernel3.zip
+          name: NetHunter-J701M-AllWiFi-ZIP
+          path: NetHunter-J701M-AllWiFi-AnyKernel3.zip
