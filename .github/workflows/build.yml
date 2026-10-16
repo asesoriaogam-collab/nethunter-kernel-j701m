@@ -20,7 +20,7 @@ jobs:
 
       - name: 3. Clonar SIMPLE-KERNEL Exynos 7870 y GCC 4.9
         run: |
-          git clone --depth=1 https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel_source
+          git clone --depth=1 https://github.com/gonicdroid/android_kernel_samsung_exynos7870.git -b main kernel_source
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
 
       - name: 4. Preparar codigo fuente (Sin tocar archivos de red)
